@@ -30,6 +30,7 @@ router.post("/signup", async (req, res) => {
       password: hashedPassword,
       subscription: "free",
       role:"user",
+      "totalQrs": 0,
       createdAt: new Date(),
     });
 
