@@ -245,7 +245,7 @@ async function startServer() {
                 color: #666;
                 line-height: 1.5;
               }
-              .user-card, .company-card { 
+              .user-card, .company-card{ 
                 background: #fff; 
                 padding: 15px; 
                 margin-bottom: 15px; 
@@ -255,6 +255,15 @@ async function startServer() {
               .company-card {
                 border-left: 4px solid #2A43F8;
               }
+                .Info-card { 
+                background: #fff; 
+               padding: 10px 10px 5px 15px; 
+                margin-bottom: 15px; 
+                border-radius: 10px; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+              }
+                .Info-card h3{
+                margin-top:-15px}
               h2 { 
                 margin: 0 0 10px 0; 
                 font-size: 18px; 
@@ -295,7 +304,7 @@ async function startServer() {
             </style>
           </head>
           <body>
-          <div class="user-card">
+          <div class="Info-card">
            ${companyInfo.companyName ? `<h1><strong></strong> ${companyInfo.companyName}</h1>` : ""}
            ${companyInfo.formName ? `<h3><strong></strong> ${companyInfo.formName}</h3>` : ""}
  </div>
