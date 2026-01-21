@@ -150,7 +150,7 @@ async function startServer() {
 
     // ---------------- SCAN QR ----------------
     // ---------------- SCAN QR ----------------
-   app.get("/scan/:id", async (req, res) => {
+  app.get("/scan/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -210,9 +210,14 @@ async function startServer() {
       const companySocial = qr.companySocial || {};
 
       // Old schema fallback
-      const oldSocial = users[0]?.social || qr.social || {};
-      const formName = companyInfo.formName || oldSocial.formName || qr.formName || "";
-      const companyName = companyInfo.companyName || qr.companyName || "";
+      const oldUser = users[0] || {};
+      const oldSocial = oldUser.social || qr.social || {};
+
+      // Form name: new schema first, then old schema
+      const formName = companyInfo.formName || oldUser.formName || oldSocial.formName || qr.formName || "";
+      const companyName = companyInfo.companyName || oldUser.companyName || qr.companyName || "";
+      const companyPhone = companyInfo.companyPhone || oldUser.companyPhone || qr.companyPhone || "";
+
       const mergedSocial = {
         instagram: companySocial.instagram || oldSocial.instagram || "",
         facebook: companySocial.facebook || oldSocial.facebook || "",
@@ -254,6 +259,9 @@ async function startServer() {
                 ${user.name ? `<p><strong>👤 Name:</strong> ${user.name}</p>` : ""}
                 ${user.email ? `<p><strong>📧 Email:</strong> <a href="mailto:${user.email}">${user.email}</a></p>` : ""}
                 ${user.phone ? `<p><strong>📱 Phone:</strong> <a href="tel:${user.phone}">${user.phone}</a></p>` : ""}
+                ${user.companyName || companyName ? `<p><strong>🏢 Company:</strong> ${user.companyName || companyName}</p>` : ""}
+                ${user.companyPhone || companyPhone ? `<p><strong>📞 Company Phone:</strong> ${user.companyPhone || companyPhone}</p>` : ""}
+                ${user.formName || formName ? `<p><strong>📝 Form Name:</strong> ${user.formName || formName}</p>` : ""}
                 ${Array.isArray(user.links) && user.links.filter(l => l).length > 0 ? `
                   <p><strong>🔗 Links:</strong></p>
                   ${user.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
@@ -264,7 +272,7 @@ async function startServer() {
             ${Object.values(companyInfo).some(v => v) || Object.values(mergedSocial).some(v => v) ? `
               <div class="company-card">
                 ${companyInfo.companyEmail ? `<p><strong>📧 Email:</strong> <a href="mailto:${companyInfo.companyEmail}">${companyInfo.companyEmail}</a></p>` : ""}
-                ${companyInfo.companyPhone || qr.companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone || qr.companyPhone}">${companyInfo.companyPhone || qr.companyPhone}</a></p>` : ""}
+                ${companyInfo.companyPhone || companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone || companyPhone}">${companyInfo.companyPhone || companyPhone}</a></p>` : ""}
                 ${companyInfo.companyAddress ? `<p><strong>📍 Address:</strong> ${companyInfo.companyAddress}</p>` : ""}
                 ${Object.values(mergedSocial).some(v => v) ? `
                   <p><strong>Follow Us:</strong></p>
@@ -290,6 +298,7 @@ async function startServer() {
     res.status(500).send("Server error");
   }
 });
+
 
     app.get("/api/stats/:id", async (req, res) => {
       try {
