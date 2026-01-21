@@ -180,25 +180,32 @@ async function startServer() {
 const isOldSchema = !qr.companyInfo && (qr.companyName || qr.formName || qr.social);
 
 const normalizedQR = {
-  ...qr,
-  users: qr.content?.users || qr.users || [],
+  _id: qr._id,
+  type: qr.type,
+  users: Array.isArray(qr.content?.users) && qr.content.users.length > 0
+          ? qr.content.users
+          : Array.isArray(qr.users) ? qr.users : [],
   globalHeading: qr.globalHeading || "",
   globalDescription: qr.globalDescription || "",
-  companyInfo: isOldSchema
-    ? {
-        companyName: qr.companyName || "",
-        formName: qr.formName || "",
-        companyEmail: qr.companyEmail || "",
-        companyPhone: qr.companyPhone || "",
-        companyAddress: qr.companyAddress || "",
-      }
-    : qr.companyInfo || {},
-  companySocial: {
-    // Merge old 'social' object with new 'companySocial'
-    ...(qr.companySocial || {}),
-    ...(qr.social || {}), 
+  companyInfo: qr.companyInfo || {  // fallback to old schema
+    companyName: qr.companyName || "",
+    formName: qr.formName || "",
+    companyEmail: qr.companyEmail || "",
+    companyPhone: qr.companyPhone || "",
+    companyAddress: qr.companyAddress || "",
   },
+  companySocial: {
+    ...(qr.companySocial || {}),  // new schema
+    ...(qr.social || {}),         // old schema
+  },
+  androidLink: qr.androidLink || null,
+  iosLink: qr.iosLink || null,
+  logo: qr.logo || null,
   content: qr.content || {},
+  scanCount: qr.scanCount || 0,
+  scanLimit: qr.scanLimit || null,
+  active: qr.active ?? true,
+  createdAt: qr.createdAt || new Date(),
 };
 
 
@@ -263,35 +270,36 @@ const normalizedQR = {
               ${companyInfo.formName ? `<h3>${companyInfo.formName}</h3>` : ""}
             </div>
 
-            ${users.length > 0 ? users.map(user => `
-              <div class="user-card">
-                ${user.name ? `<p><strong>👤 Name:</strong> ${user.name}</p>` : ""}
-                ${user.email ? `<p><strong>📧 Email:</strong> <a href="mailto:${user.email}">${user.email}</a></p>` : ""}
-                ${user.phone ? `<p><strong>📱 Phone:</strong> <a href="tel:${user.phone}">${user.phone}</a></p>` : ""}
-                ${Array.isArray(user.links) && user.links.filter(l => l).length > 0 ? `
-                  <p><strong>🔗 Links:</strong></p>
-                  ${user.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
-                ` : ""}
-              </div>
-            `).join("") : ""}
+           ${users.length > 0 ? users.map(user => `
+  <div class="user-card">
+    <p><strong>👤 Name:</strong> ${user.name || "N/A"}</p>
+    <p><strong>📧 Email:</strong> ${user.email ? `<a href="mailto:${user.email}">${user.email}</a>` : "N/A"}</p>
+    <p><strong>📱 Phone:</strong> ${user.phone ? `<a href="tel:${user.phone}">${user.phone}</a>` : "N/A"}</p>
+    ${Array.isArray(user.links) && user.links.filter(l => l).length > 0 ? `
+      <p><strong>🔗 Links:</strong></p>
+      ${user.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
+    ` : ""}
+  </div>
+`).join("") : ""}
 
-            ${Object.values(companyInfo).some(v => v) || Object.values(companySocial).some(v => v) ? `
-              <div class="company-card">
-                ${companyInfo.companyEmail ? `<p><strong>📧 Email:</strong> <a href="mailto:${companyInfo.companyEmail}">${companyInfo.companyEmail}</a></p>` : ""}
-                ${companyInfo.companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone}">${companyInfo.companyPhone}</a></p>` : ""}
-                ${companyInfo.companyAddress ? `<p><strong>📍 Address:</strong> ${companyInfo.companyAddress}</p>` : ""}
-                ${Object.values(companySocial).some(v => v) ? `
-                  <p style="margin-top:15px;"><strong>Follow Us:</strong></p>
-                  <div class="social-links">
-                    ${companySocial.instagram ? `<a href="${companySocial.instagram.startsWith('http') ? companySocial.instagram : 'https://instagram.com/' + companySocial.instagram}" target="_blank">Instagram</a>` : ""}
-                    ${companySocial.facebook ? `<a href="${companySocial.facebook.startsWith('http') ? companySocial.facebook : 'https://facebook.com/' + companySocial.facebook}" target="_blank">Facebook</a>` : ""}
-                    ${companySocial.whatsapp ? `<a href="${companySocial.whatsapp.startsWith('http') ? companySocial.whatsapp : 'https://wa.me/' + companySocial.whatsapp}" target="_blank">WhatsApp</a>` : ""}
-                    ${companySocial.snapchat ? `<a href="${companySocial.snapchat.startsWith('http') ? companySocial.snapchat : 'https://snapchat.com/add/' + companySocial.snapchat}" target="_blank">Snapchat</a>` : ""}
-                    ${companySocial.twitter ? `<a href="${companySocial.twitter.startsWith('http') ? companySocial.twitter : 'https://twitter.com/' + companySocial.twitter}" target="_blank">Twitter</a>` : ""}
-                  </div>
-                ` : ""}
-              </div>
-            ` : ""}
+${Object.values(companyInfo).some(v => v) || Object.values(companySocial).some(v => v) ? `
+  <div class="company-card">
+    ${companyInfo.companyEmail ? `<p><strong>📧 Email:</strong> <a href="mailto:${companyInfo.companyEmail}">${companyInfo.companyEmail}</a></p>` : ""}
+    ${companyInfo.companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone}">${companyInfo.companyPhone}</a></p>` : ""}
+    ${companyInfo.companyAddress ? `<p><strong>📍 Address:</strong> ${companyInfo.companyAddress}</p>` : ""}
+    ${Object.values(companySocial).some(v => v) ? `
+      <p style="margin-top:15px;"><strong>Follow Us:</strong></p>
+      <div class="social-links">
+        ${companySocial.instagram ? `<a href="${companySocial.instagram.startsWith('http') ? companySocial.instagram : 'https://instagram.com/' + companySocial.instagram}" target="_blank">Instagram</a>` : ""}
+        ${companySocial.facebook ? `<a href="${companySocial.facebook.startsWith('http') ? companySocial.facebook : 'https://facebook.com/' + companySocial.facebook}" target="_blank">Facebook</a>` : ""}
+        ${companySocial.whatsapp ? `<a href="${companySocial.whatsapp.startsWith('http') ? companySocial.whatsapp : 'https://wa.me/' + companySocial.whatsapp}" target="_blank">WhatsApp</a>` : ""}
+        ${companySocial.snapchat ? `<a href="${companySocial.snapchat.startsWith('http') ? companySocial.snapchat : 'https://snapchat.com/add/' + companySocial.snapchat}" target="_blank">Snapchat</a>` : ""}
+        ${companySocial.twitter ? `<a href="${companySocial.twitter.startsWith('http') ? companySocial.twitter : 'https://twitter.com/' + companySocial.twitter}" target="_blank">Twitter</a>` : ""}
+      </div>
+    ` : ""}
+  </div>
+` : ""}
+
           </body>
         </html>
       `);
