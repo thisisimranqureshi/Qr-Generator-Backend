@@ -295,8 +295,10 @@ async function startServer() {
             </style>
           </head>
           <body>
+          <div class="user-card">
            ${companyInfo.companyName ? `<h1><strong></strong> ${companyInfo.companyName}</h1>` : ""}
-
+           ${companyInfo.formName ? `<h3><strong></strong> ${companyInfo.formName}</h3>` : ""}
+ </div>
             ${users.length > 0 ? `
   
               ${users.map(user => `
