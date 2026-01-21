@@ -10,7 +10,7 @@ const { router: authRouter, setCollection: setAuthUsersCollection } =
 
 const {
   router: adminRouter,
-  setUsersCollection: setAdminUsersCollection,setQrCollection: setAdminQrCollection
+  setUsersCollection: setAdminUsersCollection, setQrCollection: setAdminQrCollection
 } = require("./Routes/admin.routes");
 
 const auth = require("./Middlewear/Auth");
@@ -38,57 +38,87 @@ async function startServer() {
     // inject collections
     setAuthUsersCollection(usersCollection);
     setAdminUsersCollection(usersCollection);
-    setAdminQrCollection(qrCollection); 
+    setAdminQrCollection(qrCollection);
 
     // ---------------- Routes ----------------
     app.use("/api/auth", authRouter);
     app.use("/api/admin", adminRouter);
 
     // ---------------- CREATE QR ----------------
-   app.post("/api/create-qr", auth, async (req, res) => {
-  try {
-    const { type, content, androidLink, iosLink } = req.body;
+    // ---------------- CREATE QR ----------------
+    app.post("/api/create-qr", auth, async (req, res) => {
+      try {
+        const { type, content, androidLink, iosLink, logo } = req.body;
 
-    if (!type || !content) {
-      return res.status(400).json({ error: "Missing required data" });
-    }
+        if (!type || !content) {
+          return res.status(400).json({ error: "Missing required data" });
+        }
 
-    // Check premium only for text or app
-    const isPremiumFeature = type === "text" || type === "app";
-    if (isPremiumFeature && req.user.subscription !== "premium") {
-      return res.status(403).json({
-        error: "This feature requires a premium subscription"
-      });
-    }
+        // ---------------- PREMIUM CHECK ----------------
+        const isPremiumFeature = type === "text" || type === "app";
+        if (isPremiumFeature && req.user.subscription !== "premium") {
+          return res.status(403).json({
+            error: "This feature requires a premium subscription"
+          });
+        }
 
-    const id = uuidv4();
+        // ---------------- CUSTOM QR VALIDATION ----------------
+        if (type === "custom") {
+          // Ensure content.users exists and is array
+          if (!Array.isArray(content.users) || content.users.length === 0) {
+            return res.status(400).json({ error: "Custom QR must have at least one user" });
+          }
 
-    // Insert QR into Scan_count collection
-    await qrCollection.insertOne({
-      _id: id,
-      type,
-  content,
-      androidLink: androidLink || null,
-      iosLink: iosLink || null,
-      scanCount: 0,
-      scanLimit: isPremiumFeature ? 300 : null,
-      active: true,
-      createdAt: new Date(),
-      userId: new ObjectId(req.user.userId)
+          // Optional: limit free users to 1 user
+          if (req.user.subscription !== "premium" && content.users.length > 1) {
+            return res.status(403).json({
+              error: "Free plan allows only 1 user in custom QR. Upgrade to premium for more."
+            });
+          }
+
+          // Validate each user object
+          for (const user of content.users) {
+            if (!user.heading || !user.description || !user.phone) {
+              return res.status(400).json({
+                error: "Each user must have heading, description, and phone"
+              });
+            }
+
+            if (!Array.isArray(user.links)) user.links = [];
+            if (!user.social) user.social = {};
+          }
+        }
+
+        // ---------------- CREATE QR ----------------
+        const id = uuidv4();
+
+        await qrCollection.insertOne({
+          _id: id,
+          type,
+          content,
+          androidLink: androidLink || null,
+          iosLink: iosLink || null,
+          logo: logo || null,
+          scanCount: 0,
+          scanLimit: isPremiumFeature ? 300 : null,
+          active: true,
+          createdAt: new Date(),
+          userId: new ObjectId(req.user.userId)
+        });
+
+        // ---------------- UPDATE USER QR COUNT ----------------
+        await usersCollection.updateOne(
+          { _id: new ObjectId(req.user.userId) },
+          { $inc: { totalQrs: 1 } }
+        );
+
+        res.json({ id });
+      } catch (err) {
+        console.error("Create QR error:", err);
+        res.status(500).json({ error: "Error creating QR" });
+      }
     });
 
-    // ✅ Increment user's totalQrs
-    await usersCollection.updateOne(
-      { _id: new ObjectId(req.user.userId) },
-      { $inc: { totalQrs: 1 } }
-    );
-
-    res.json({ id });
-  } catch (err) {
-    console.error("Create QR error:", err);
-    res.status(500).json({ error: "Error creating QR" });
-  }
-});
 
 
 
@@ -97,72 +127,44 @@ async function startServer() {
 app.get("/scan/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     console.log(`📱 Scanning QR: ${id}`);
 
-    // 🔹 ATOMIC INCREMENT - Find and update in one operation
+    // 🔹 Find and increment scan count
     const result = await qrCollection.findOneAndUpdate(
       { _id: id },
       { $inc: { scanCount: 1 } },
       { returnDocument: "after" }
     );
 
-    console.log("Update result:", result);
-
-    // Handle different MongoDB driver versions
     const qr = result.value || result;
 
-    if (!qr) {
-      console.log(`❌ QR not found: ${id}`);
-      return res.status(404).send("QR code not found");
-    }
+    if (!qr) return res.status(404).send("QR code not found");
 
-    console.log(`✅ QR found. Type: ${qr.type}, New scan count: ${qr.scanCount}`);
-
-    // ⛔ Check if QR is inactive
+    // Inactive check
     if (!qr.active) {
-      console.log(`🚫 QR is disabled: ${id}`);
-      return res.status(403).send(`
-        <html><body><h2>QR Disabled</h2></body></html>
-      `);
+      return res.status(403).send(`<html><body><h2>QR Disabled</h2></body></html>`);
     }
 
-    // 🚫 Check scan limit
     const limit = qr.scanLimit ?? 300;
     if (qr.scanCount > limit) {
-      console.log(`⛔ Scan limit reached for QR: ${id}`);
-      await qrCollection.updateOne(
-        { _id: id },
-        { $set: { active: false } }
-      );
-      return res.status(403).send(`
-        <html><body><h2>Scan Limit Reached</h2></body></html>
-      `);
+      await qrCollection.updateOne({ _id: id }, { $set: { active: false } });
+      return res.status(403).send(`<html><body><h2>Scan Limit Reached</h2></body></html>`);
     }
 
     const ua = (req.headers["user-agent"] || "").toLowerCase();
 
-    // 📱 App QR
+    // App QR redirect
     if (qr.type === "app") {
-      if (ua.includes("iphone") && qr.iosLink) {
-        console.log(`🍎 Redirecting to iOS: ${qr.iosLink}`);
-        return res.redirect(qr.iosLink);
-      }
-      if (ua.includes("android") && qr.androidLink) {
-        console.log(`🤖 Redirecting to Android: ${qr.androidLink}`);
-        return res.redirect(qr.androidLink);
-      }
+      if (ua.includes("iphone") && qr.iosLink) return res.redirect(qr.iosLink);
+      if (ua.includes("android") && qr.androidLink) return res.redirect(qr.androidLink);
     }
 
-    // 🌐 URL / WhatsApp
-    if (qr.type === "url" || qr.type === "whatsapp") {
-      console.log(`🔗 Redirecting to: ${qr.content}`);
-      return res.redirect(qr.content);
-    }
+    // URL / WhatsApp
+    if (qr.type === "url" || qr.type === "whatsapp") return res.redirect(qr.content);
 
-    // 📝 Text QR
+    // Text QR
     if (qr.type === "text") {
-      console.log(`📝 Displaying text QR`);
       return res.send(`
         <html>
           <body style="font-family:Arial;">
@@ -174,99 +176,53 @@ app.get("/scan/:id", async (req, res) => {
         </html>
       `);
     }
- if (qr.type === "custom") {
-  return res.send(`
-    <html>
-      <head>
-        <title>QR Info</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          /* Reset */
-          * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-          }
 
-          body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-          }
+    // Custom QR
+    if (qr.type === "custom") {
+      return res.send(`
+        <html>
+          <head>
+          
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body { font-family: Arial, sans-serif; background:#f5f5f5; padding:20px; }
+              .user-card { background:#fff; padding:15px; margin-bottom:15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+              h2 { margin-bottom:10px; font-size:18px; color:#333; }
+              p { margin:4px 0; font-size:16px; color:#555; word-break: break-word; }
+              a { color:#fffff; text-decoration:none; }
+              a:hover { text-decoration:underline; }
+              .social-links { display:flex; gap:10px; margin-top:10px; }
+              .social-links a { display:inline-block; width:32px; height:32px; }
+              .social-links img { width:100%; height:100%; object-fit:contain; }
+            </style>
+          </head>
+          <body>
+          
 
-          .qr-container {
-            background: #fff;
-            padding: 25px 20px;
-            border-radius: 15px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-            width: 100%;
-            max-width: 500px;
-            text-align: center;
-          }
+            ${qr.content.users.map(user => `
+              <div class="user-card">
+                <h2>${user.heading}</h2>
+                <p>${user.description}</p>
+                <p>Phone: <a href="tel:${user.phone}">${user.phone}</a></p>
 
-          h2 {
-            color: #333;
-            margin-bottom: 25px;
-            font-size: 22px;
-          }
+                ${user.links.map(link => `<p> Website: <a href="${link}" target="_blank">${link}</a></p>`).join("")}
 
-          p {
-            margin-bottom: 20px;
-            font-size: 18px;
-            color: #444;
-            word-wrap: break-word;
-            line-height: 1.5;
-          }
+                <div class="social-links">
+                  ${user.social.instagram ? `<a href="https://instagram.com/${user.social.instagram.replace(/^https?:\/\//, '')}" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" alt="Instagram"/></a>` : ""}
+                  ${user.social.facebook ? `<a href="https://facebook.com/${user.social.facebook.replace(/^https?:\/\//, '')}" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" alt="Facebook"/></a>` : ""}
+                  ${user.social.whatsapp ? `<a href="https://wa.me/${user.social.whatsapp.replace(/\D/g,'')}" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733585.png" alt="WhatsApp"/></a>` : ""}
+                  ${user.social.x ? `<a href="https://twitter.com/${user.social.x.replace(/^https?:\/\//, '')}" target="_blank"><img src="https://cdn-icons-png.flaticon.com/512/733/733579.png" alt="X"/></a>` : ""}
+                </div>
+              </div>
+            `).join("")}
 
-          a {
-            color: #2A43F8;
-            text-decoration: none;
-            font-weight: bold;
-          }
+          </body>
+        </html>
+      `);
+    }
 
-          a:hover {
-            text-decoration: underline;
-          }
-
-          small {
-            display: block;
-            margin-top: 25px;
-            color: #888;
-            font-size: 14px;
-          }
-
-          /* Make text bigger on very small devices */
-          @media (max-width: 360px) {
-            h2 {
-              font-size: 20px;
-            }
-            p {
-              font-size: 16px;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="qr-container">
-         
-          ${qr.content.text ? `<p>${qr.content.text}</p>` : ""}
-          ${qr.content.url ? `<p> <a href="${qr.content.url}" target="_blank">${qr.content.url}</a></p>` : ""}
-        
-        </div>
-      </body>
-    </html>
-  `);
-}
-
-
-
-
-    console.log(`❓ Invalid QR type: ${qr.type}`);
     res.status(400).send("Invalid QR type");
+
   } catch (err) {
     console.error("❌ Scan error:", err);
     res.status(500).send("Server error");
