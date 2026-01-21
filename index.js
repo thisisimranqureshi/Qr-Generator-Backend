@@ -176,33 +176,31 @@ async function startServer() {
     }
 
     // Normalize QR data (support old and new schema)
-    const isOldSchema = !qr.companyInfo && (qr.companyName || qr.formName || qr.social);
+   // Normalize QR data (support old and new schema)
+const isOldSchema = !qr.companyInfo && (qr.companyName || qr.formName || qr.social);
 
-    const normalizedQR = {
-      ...qr,
-      users: qr.content?.users || qr.users || [],
-      globalHeading: qr.globalHeading || "",
-      globalDescription: qr.globalDescription || "",
-      companyInfo: isOldSchema
-        ? {
-            companyName: qr.companyName || "",
-            formName: qr.formName || "",
-            companyEmail: qr.companyEmail || "",
-            companyPhone: qr.companyPhone || "",
-            companyAddress: qr.companyAddress || "",
-          }
-        : qr.companyInfo || {},
-      companySocial: isOldSchema
-        ? qr.social || {
-            instagram: "",
-            facebook: "",
-            whatsapp: "",
-            snapchat: "",
-            twitter: "",
-          }
-        : qr.companySocial || {},
-      content: qr.content || {},
-    };
+const normalizedQR = {
+  ...qr,
+  users: qr.content?.users || qr.users || [],
+  globalHeading: qr.globalHeading || "",
+  globalDescription: qr.globalDescription || "",
+  companyInfo: isOldSchema
+    ? {
+        companyName: qr.companyName || "",
+        formName: qr.formName || "",
+        companyEmail: qr.companyEmail || "",
+        companyPhone: qr.companyPhone || "",
+        companyAddress: qr.companyAddress || "",
+      }
+    : qr.companyInfo || {},
+  companySocial: {
+    // Merge old 'social' object with new 'companySocial'
+    ...(qr.companySocial || {}),
+    ...(qr.social || {}), 
+  },
+  content: qr.content || {},
+};
+
 
     // Handle app QR
     if (qr.type === "app") {
