@@ -204,6 +204,11 @@ async function startServer() {
     // Custom QR
     if (qr.type === "custom") {
       const users = qr.content?.users || [];
+      // collect links from new + old QR schema
+const allLinks = users.flatMap(u =>
+  Array.isArray(u.links) ? u.links.filter(l => l) : []
+);
+
 
       // New schema
       const companyInfo = qr.companyInfo || {};
@@ -275,10 +280,13 @@ async function startServer() {
             ${Object.values(companyInfo).some(v => v) || Object.values(mergedSocial).some(v => v) ? `
               <div class="company-card">
       
-                           ${Array.isArray(users.links) && users.links.filter(l => l).length > 0 ? `
-                  <p><strong>🔗 Links:</strong></p>
-                  ${users.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
-                ` : ""}
+                    ${allLinks.length > 0 ? `
+  <p><strong>🔗 Links:</strong></p>
+  ${allLinks.map(link => `
+    <p><a href="${link}" target="_blank">${link}</a></p>
+  `).join("")}
+` : ""}
+
                 ${companyInfo.companyEmail ? `<p><strong>📧 Email:</strong> <a href="mailto:${companyInfo.companyEmail}">${companyInfo.companyEmail}</a></p>` : ""}
                 ${companyInfo.companyPhone || companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone || companyPhone}">${companyInfo.companyPhone || companyPhone}</a></p>` : ""}
                 ${companyInfo.companyAddress ? `<p><strong>📍 Address:</strong> ${companyInfo.companyAddress}</p>` : ""}
