@@ -234,9 +234,12 @@ async function startServer() {
           <head>
             <title>Custom QR Info</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
             <style>
               body { font-family: Arial; background: #f5f5f5; padding: 20px; margin:0; }
-              .Info-card, .user-card, .company-card { background: #fff; padding:15px; margin-bottom:15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+              .user-card, .company-card { background: #fff; padding:15px; margin-bottom:15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+              .Info-card{ background: #fff; padding:15px 15px 5px 15px; margin-bottom:15px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
               .company-card { border-left: 4px solid #2A43F8; }
               h1 { margin:0 0 10px 0; font-size:24px; color:#2A43F8; }
               h3 { margin-top:-10px; font-size:18px; }
@@ -245,6 +248,11 @@ async function startServer() {
               a:hover { text-decoration:underline; }
               .social-links { display:flex; gap:15px; flex-wrap:wrap; margin-top:10px; }
               .social-links a img { width:36px; height:36px; }
+              .fa-snapchat {
+  color: #FFFC00;
+  font-size: 36px;
+}
+
             </style>
           </head>
           <body>
@@ -259,18 +267,18 @@ async function startServer() {
                 ${user.name ? `<p><strong>👤 Name:</strong> ${user.name}</p>` : ""}
                 ${user.email ? `<p><strong>📧 Email:</strong> <a href="mailto:${user.email}">${user.email}</a></p>` : ""}
                 ${user.phone ? `<p><strong>📱 Phone:</strong> <a href="tel:${user.phone}">${user.phone}</a></p>` : ""}
-                ${user.companyName || companyName ? `<p><strong>🏢 Company:</strong> ${user.companyName || companyName}</p>` : ""}
-                ${user.companyPhone || companyPhone ? `<p><strong>📞 Company Phone:</strong> ${user.companyPhone || companyPhone}</p>` : ""}
-                ${user.formName || formName ? `<p><strong>📝 Form Name:</strong> ${user.formName || formName}</p>` : ""}
-                ${Array.isArray(user.links) && user.links.filter(l => l).length > 0 ? `
-                  <p><strong>🔗 Links:</strong></p>
-                  ${user.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
-                ` : ""}
+      
+                
               </div>
             `).join("") : ""}
 
             ${Object.values(companyInfo).some(v => v) || Object.values(mergedSocial).some(v => v) ? `
               <div class="company-card">
+      
+                           ${Array.isArray(users.links) && users.links.filter(l => l).length > 0 ? `
+                  <p><strong>🔗 Links:</strong></p>
+                  ${users.links.filter(l => l).map(link => `<p><a href="${link}" target="_blank">${link}</a></p>`).join("")}
+                ` : ""}
                 ${companyInfo.companyEmail ? `<p><strong>📧 Email:</strong> <a href="mailto:${companyInfo.companyEmail}">${companyInfo.companyEmail}</a></p>` : ""}
                 ${companyInfo.companyPhone || companyPhone ? `<p><strong>📱 Phone:</strong> <a href="tel:${companyInfo.companyPhone || companyPhone}">${companyInfo.companyPhone || companyPhone}</a></p>` : ""}
                 ${companyInfo.companyAddress ? `<p><strong>📍 Address:</strong> ${companyInfo.companyAddress}</p>` : ""}
@@ -280,7 +288,7 @@ async function startServer() {
                     ${mergedSocial.instagram ? `<a href="${mergedSocial.instagram.startsWith('http') ? mergedSocial.instagram : 'https://instagram.com/' + mergedSocial.instagram}" target="_blank"><img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram"></a>` : ""}
                     ${mergedSocial.facebook ? `<a href="${mergedSocial.facebook.startsWith('http') ? mergedSocial.facebook : 'https://facebook.com/' + mergedSocial.facebook}" target="_blank"><img src="https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg" alt="Facebook"></a>` : ""}
                     ${mergedSocial.whatsapp ? `<a href="${mergedSocial.whatsapp.startsWith('http') ? mergedSocial.whatsapp : 'https://wa.me/' + mergedSocial.whatsapp}" target="_blank"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp"></a>` : ""}
-                    ${mergedSocial.snapchat ? `<a href="${mergedSocial.snapchat.startsWith('http') ? mergedSocial.snapchat : 'https://snapchat.com/add/' + mergedSocial.snapchat}" target="_blank"><img src="https://upload.wikimedia.org/wikipedia/commons/0/0c/Snapchat_logo.png" alt="Snapchat"></a>` : ""}
+                    ${mergedSocial.snapchat ? `<a href="${mergedSocial.snapchat.startsWith('http') ? mergedSocial.snapchat : 'https://snapchat.com/add/' + mergedSocial.snapchat}" target="_blank"><i class="fa-brands fa-snapchat" ></i></a>` : ""}
                     ${mergedSocial.twitter ? `<a href="${mergedSocial.twitter.startsWith('http') ? mergedSocial.twitter : 'https://twitter.com/' + mergedSocial.twitter}" target="_blank"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Logo_of_Twitter.svg" alt="Twitter"></a>` : ""}
                   </div>
                 ` : ""}
