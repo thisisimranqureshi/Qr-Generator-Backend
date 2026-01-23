@@ -72,18 +72,39 @@ router.get("/user/:id/qrs", auth, admin, async (req, res) => {
       .sort({ createdAt: -1 })
       .toArray();
 
-    const formattedQrs = qrs.map((qr) => ({
-      _id: qr._id,
-      type: qr.type,
-      content: qr.content,
-      androidLink: qr.androidLink,
-      iosLink: qr.iosLink,
-      scanCount: qr.scanCount,
-      scanLimit: qr.scanLimit ?? 300,
-      remainingScans: (qr.scanLimit ?? 300) - qr.scanCount,
-      active: qr.active,
-      createdAt: qr.createdAt,
-    }));
+    const formattedQrs = qrs.map((qr) => {
+      const base = {
+        _id: qr._id,
+        type: qr.type,
+        scanCount: qr.scanCount || 0,
+        scanLimit: qr.scanLimit ?? 300,
+        remainingScans: (qr.scanLimit ?? 300) - (qr.scanCount || 0),
+        active: qr.active,
+        createdAt: qr.createdAt,
+      };
+
+      // ✅ CUSTOM QR
+      if (qr.type === "custom") {
+        return {
+          ...base,
+          content: qr.content || {},
+          users: qr.content?.users || [],
+          companyInfo: qr.companyInfo || {},
+          companySocial: qr.companySocial || {},
+          globalHeading: qr.globalHeading || "",
+          globalDescription: qr.globalDescription || "",
+          logo: qr.logo || null,
+        };
+      }
+
+      // ✅ OTHER QR TYPES
+      return {
+        ...base,
+        content: qr.content,
+        androidLink: qr.androidLink,
+        iosLink: qr.iosLink,
+      };
+    });
 
     res.json(formattedQrs);
   } catch (err) {
@@ -91,6 +112,58 @@ router.get("/user/:id/qrs", auth, admin, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// 🗑️ Admin delete a single QR code
+// 🗑️ Admin delete a single QR code
+router.delete("/qr/:id", auth, admin, async (req, res) => {
+  try {
+    const qrId = req.params.id;
+
+    const result = await qrCollection.deleteOne({
+      _id: qrId, // ✅ UUID STRING — NOT ObjectId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "QR not found" });
+    }
+
+    res.json({ message: "QR deleted successfully" });
+  } catch (err) {
+    console.error("Delete QR error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+// 🗑️ Admin delete a single user (and all their QRs)
+router.delete("/user/:id", auth, admin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const userObjectId = new ObjectId(userId);
+
+    // 1️⃣ Delete user
+    const userResult = await usersCollection.deleteOne({
+      _id: userObjectId,
+    });
+
+    if (userResult.deletedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // 2️⃣ Delete all QRs of this user
+    await qrCollection.deleteMany({
+      userId: userObjectId,
+    });
+
+    res.json({
+      message: "User and all associated QR codes deleted successfully",
+    });
+  } catch (err) {
+    console.error("Delete user error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
 // 🔁 Toggle QR active/disabled (admin only)
 // 🔁 Admin toggle QR active/inactive
 router.patch("/qr/:id/toggle", auth, admin, async (req, res) => {
