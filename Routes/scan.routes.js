@@ -40,10 +40,55 @@ router.get("/:id", async (req, res) => {
             if (ua.includes("android") && qr.androidLink) return res.redirect(qr.androidLink);
         }
 
-        // URL / WhatsApp QR
-        if (qr.type === "url" || qr.type === "whatsapp") {
-            return res.redirect(qr.content?.url || qr.content);
-        }
+        // URL / WhatsApp / FB / YT / IG / IMAGE
+        // EMAIL QR
+if (qr.type === "email") {
+  // qr.content can be a string like "user@example.com" or an object with .email
+  const emailAddress = qr.content?.email || qr.content;
+
+  if (!emailAddress) return res.status(400).send("Invalid QR content");
+
+  const mailtoLink = `mailto:${emailAddress}`;
+  return res.redirect(mailtoLink);
+}
+
+if (
+  ["url", "whatsapp", "facebook", "youtube", "instagram", "image"].includes(qr.type)
+) {
+  let redirectUrl = "";
+
+  switch (qr.type) {
+    case "url":
+    case "image":
+      redirectUrl = qr.content?.url || qr.content;
+      break;
+
+    case "facebook":
+      redirectUrl = qr.content?.url || (qr.content?.url?.startsWith("http") ? qr.content.url : "https://facebook.com/" + qr.content.url);
+      break;
+
+    case "youtube":
+      redirectUrl = qr.content?.url || (qr.content?.url?.startsWith("http") ? qr.content.url : "https://youtube.com/" + qr.content.url);
+      break;
+
+    case "instagram":
+      redirectUrl = qr.content?.url || (qr.content?.url?.startsWith("http") ? qr.content.url : "https://instagram.com/" + qr.content.url);
+      break;
+
+ case "whatsapp":
+  if (qr.content && qr.content.phone) {
+    redirectUrl = `https://wa.me/${qr.content.phone}?text=${encodeURIComponent(qr.content.message || "")}`;
+  }
+  break;
+
+
+  }
+
+  if (!redirectUrl) return res.status(400).send("Invalid QR content");
+
+  return res.redirect(redirectUrl);
+}
+
 
         // Text QR
         if (qr.type === "text") {

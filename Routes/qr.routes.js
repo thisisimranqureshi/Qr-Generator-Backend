@@ -11,107 +11,140 @@ let qrCollection;
 
 // inject collections
 const setUsersCollection = (collection) => {
-  usersCollection = collection;
+    usersCollection = collection;
 };
 
 const setQrCollection = (collection) => {
-  qrCollection = collection;
+    qrCollection = collection;
 };
 router.post("/create-qr", auth, async (req, res) => {
-      try {
-        let { type, content, androidLink, iosLink, logo, companyInfo, companySocial, globalHeading, globalDescription } = req.body;
+  try {
+    let { type, content, androidLink, iosLink, logo, companyInfo, companySocial, globalHeading, globalDescription } = req.body;
 
-        if (!type || !content) {
-          return res.status(400).json({ error: "Missing required data" });
+    if (!type) return res.status(400).json({ error: "Missing QR type" });
+
+    // Normalize content object based on type
+    switch (type) {
+      case "text":
+        content = { text: content || "" };
+        break;
+
+      case "url":
+      case "facebook":
+      case "youtube":
+      case "instagram":
+      case "image":
+        content = { url: content || "" };
+        break;
+
+      case "email":
+        content = { text: content || "" }; // mailto link handled in frontend if needed
+        break;
+
+  case "whatsapp":
+  if (!content) return res.status(400).json({ error: "WhatsApp content required" });
+
+  // If content is string, assume phone only
+  if (typeof content === "string") {
+    content = { phone: content, message: "" };
+  }
+
+  if (!content.phone) return res.status(400).json({ error: "WhatsApp phone number is required" });
+
+  content = {
+    phone: content.phone,
+    message: content.message || ""
+  };
+  break;
+
+
+
+      case "app":
+        content = { androidLink: androidLink || "", iosLink: iosLink || "" };
+        break;
+
+      case "custom":
+        // existing custom logic
+        companyInfo = companyInfo || {
+          formName: "",
+          companyName: "",
+          companyEmail: "",
+          companyPhone: "",
+          companyAddress: ""
+        };
+
+        companySocial = companySocial || {
+          instagram: "",
+          facebook: "",
+          whatsapp: "",
+          snapchat: "",
+          twitter: ""
+        };
+
+        globalHeading = globalHeading || "";
+        globalDescription = globalDescription || "";
+
+        if (!Array.isArray(content.users) || content.users.length === 0) {
+          return res.status(400).json({ error: "Custom QR must have at least one user" });
         }
 
-        // ---------------- PREMIUM CHECK ----------------
-        const isPremiumFeature = type === "text" || type === "app";
-        if (isPremiumFeature && req.user.subscription !== "premium") {
+        if (req.user.subscription !== "premium" && content.users.length > 1) {
           return res.status(403).json({
-            error: "This feature requires a premium subscription"
+            error: "Free plan allows only 1 user in custom QR. Upgrade to premium for more."
           });
         }
 
-        // ---------------- CUSTOM QR VALIDATION ----------------
-        if (type === "custom") {
-          // Default for backwards compatibility
-          companyInfo = companyInfo || {
-            formName: "",
-            companyName: "",
-            companyEmail: "",
-            companyPhone: "",
-            companyAddress: ""
-          };
+        content.users = content.users.map(user => ({
+          name: user.name || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          links: Array.isArray(user.links) ? user.links : [],
+          social: user.social || {}
+        }));
+        break;
 
-          companySocial = companySocial || {
-            instagram: "",
-            facebook: "",
-            whatsapp: "",
-            snapchat: "",
-            twitter: ""
-          };
+      default:
+        return res.status(400).json({ error: "Unknown QR type" });
+    }
 
-          globalHeading = globalHeading || "";
-          globalDescription = globalDescription || "";
+    // ---------------- CREATE QR ----------------
+    const id = uuidv4();
 
-          // Ensure content.users exists and is array
-          if (!Array.isArray(content.users) || content.users.length === 0) {
-            return res.status(400).json({ error: "Custom QR must have at least one user" });
-          }
-
-          // Optional: limit free users to 1 user
-          if (req.user.subscription !== "premium" && content.users.length > 1) {
-            return res.status(403).json({
-              error: "Free plan allows only 1 user in custom QR. Upgrade to premium for more."
-            });
-          }
-
-          // Validate each user object
-          content.users = content.users.map(user => ({
-            name: user.name || "",
-            email: user.email || "",
-            phone: user.phone || "",
-            links: Array.isArray(user.links) ? user.links : []
-          }));
-        }
-
-        // ---------------- CREATE QR ----------------
-        const id = uuidv4();
-
-        await qrCollection.insertOne({
-          _id: id,
-          type,
-          content,
-          globalHeading,
-          globalDescription,
-          androidLink: androidLink || null,
-          iosLink: iosLink || null,
-          logo: logo || null,
-          companyInfo,
-          companySocial,
-          scanCount: 0,
-          scanLimit: isPremiumFeature ? 300 : null,
-          active: true,
-          createdAt: new Date(),
-          userId: new ObjectId(req.user.userId)
-        });
-
-        // ---------------- UPDATE USER QR COUNT ----------------
-        await usersCollection.updateOne(
-          { _id: new ObjectId(req.user.userId) },
-          { $inc: { totalQrs: 1 } }
-        );
-
-        res.json({ id });
-      } catch (err) {
-        console.error("Create QR error:", err);
-        res.status(500).json({ error: "Error creating QR" });
-      }
+    await qrCollection.insertOne({
+      _id: id,
+      type,
+      content,
+      globalHeading,
+      globalDescription,
+      androidLink: androidLink || null,
+      iosLink: iosLink || null,
+      logo: logo || null,
+      companyInfo: companyInfo || {},
+      companySocial: companySocial || {},
+      scanCount: 0,
+      scanLimit: ["text", "app"].includes(type) ? 300 : null,
+      active: true,
+      createdAt: new Date(),
+      userId: new ObjectId(req.user.userId)
     });
 
-    module.exports = {
-  router,
-  setUsersCollection,
-  setQrCollection
+    // Update user QR count
+    await usersCollection.updateOne(
+      { _id: new ObjectId(req.user.userId) },
+      { $inc: { totalQrs: 1 } }
+    );
+
+    res.json({ id });
+
+  } catch (err) {
+    console.error("Create QR error:", err);
+    res.status(500).json({ error: "Error creating QR" });
+  }
+});
+
+
+module.exports = {
+    router,
+    setUsersCollection,
+    setQrCollection
 };
