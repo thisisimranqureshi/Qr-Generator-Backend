@@ -3,6 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 const { v4: uuidv4 } = require("uuid");
+//--------------------user dashbaord-----------------------
+const dashboardRoutes = require("./Routes/dashboard.routes.js");
+
+
+
 //----------------------create qr-code route--------------------
 const {
   router: qrRouter,
@@ -32,6 +37,7 @@ app.use(express.json());
 app.use("/scan", scanRouter);
 
 
+
 // ---------------- MongoDB ----------------
 const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri);
@@ -59,6 +65,10 @@ async function startServer() {
     app.use("/api/admin", adminRouter);
     app.use("/api", qrRouter);
     app.use("/scan", scanRouter);
+    app.use(
+  "/api/dashboard",
+  dashboardRoutes(qrCollection)
+);
 
     // ---------------- CREATE QR ----------------
 
