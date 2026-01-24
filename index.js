@@ -65,9 +65,7 @@ async function startServer() {
     app.use("/api/admin", adminRouter);
     app.use("/api", qrRouter);
     app.use("/scan", scanRouter);
-    app.use(
-  "/api/dashboard",
-  dashboardRoutes(qrCollection)
+    app.use("/api/dashboard",dashboardRoutes(qrCollection)
 );
 
     // ---------------- CREATE QR ----------------
