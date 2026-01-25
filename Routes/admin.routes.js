@@ -6,17 +6,19 @@ const admin = require("../Middlewear/Admins");
 const router = express.Router();
 
 let usersCollection;
-let qrCollection; // ⚠ Add this
-
+let qrCollection; 
+let freeQrCollection;
 // setter to inject DB collections
 const setUsersCollection = (collection) => {
   usersCollection = collection;
 };
 
 const setQrCollection = (collection) => {
-  qrCollection = collection; // ⚠ Add this
+  qrCollection = collection; 
 };
-
+const setFreeQrCollection = (collection) => {
+  freeQrCollection = collection;
+};
 // ---------------- ROUTES ----------------
 
 // GET all users (admin only)
@@ -162,9 +164,6 @@ router.delete("/user/:id", auth, admin, async (req, res) => {
   }
 });
 
-
-
-// 🔁 Toggle QR active/disabled (admin only)
 // 🔁 Admin toggle QR active/inactive
 router.patch("/qr/:id/toggle", auth, admin, async (req, res) => {
   try {
@@ -192,9 +191,30 @@ router.patch("/qr/:id/toggle", auth, admin, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+// GET total free QR stats
+router.get("/free-qr-stats", auth, admin, async (req, res) => {
+  try {
+    const freeStats = await freeQrCollection.findOne({ _id: "globalCounter" });
+    if (!freeStats) {
+      return res.json({ total: 0, qrData: [] });
+    }
+
+    res.json({
+      total: freeStats.total || 0,
+      qrData: freeStats.qrData || [],
+    });
+  } catch (err) {
+    console.error("Free QR stats error:", err);
+    res.status(500).json({ error: "Failed to get free QR stats" });
+  }
+});
+
+
+
 
 module.exports = {
   router,
   setUsersCollection,
-  setQrCollection, // ⚠ Export setter
+  setQrCollection, 
+  setFreeQrCollection
 };

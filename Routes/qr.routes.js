@@ -8,6 +8,13 @@ const router = express.Router();
 
 let usersCollection;
 let qrCollection;
+// At the top, after setting qrCollection and usersCollection
+let freeQrCollection;
+
+const setFreeQrCollection = (collection) => {
+    freeQrCollection = collection;
+};
+
 
 // inject collections
 const setUsersCollection = (collection) => {
@@ -127,12 +134,31 @@ router.post("/create-qr", auth, async (req, res) => {
       createdAt: new Date(),
       userId: new ObjectId(req.user.userId)
     });
+    // ---------------- FREE QR TRACKING ----------------
+const freeTypes = ["whatsapp", "url", "email", "facebook", "youtube", "instagram", "image"]; // define your free types
+if (freeTypes.includes(type)) {
+  // Save a document in freeqrs collection
+  await freeQrCollection.updateOne(
+    { _id: "globalCounter" },             // singleton document to track total
+    { 
+      $inc: { total: 1 },                 // increment total free QR count
+      $push: { qrData: {                 // save this QR's info
+        qrId: id,
+        type,
+        userId: req.user.userId,
+        createdAt: new Date()
+      }}
+    },
+    { upsert: true }                      // create if doesn't exist
+  );
+}
 
     // Update user QR count
     await usersCollection.updateOne(
       { _id: new ObjectId(req.user.userId) },
       { $inc: { totalQrs: 1 } }
     );
+  
 
     res.json({ id });
 
@@ -141,10 +167,31 @@ router.post("/create-qr", auth, async (req, res) => {
     res.status(500).json({ error: "Error creating QR" });
   }
 });
+router.post("/create-free-qr", async (req, res) => {
+  try {
+    const { type, userId } = req.body;
+
+    await freeQrCollection.updateOne(
+      { _id: "globalCounter" },
+      {
+        $inc: { total: 1 },
+        $push: { qrData: { type, userId: userId || null, createdAt: new Date() } },
+      },
+      { upsert: true }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Free QR tracking error:", err);
+    res.status(500).json({ error: "Failed to track free QR" });
+  }
+});
+
 
 
 module.exports = {
     router,
     setUsersCollection,
-    setQrCollection
+    setQrCollection,
+    setFreeQrCollection
 };
