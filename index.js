@@ -3,8 +3,16 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 
+const app = express();
+
+// ⚠️ MIDDLEWARE MUST BE BEFORE ROUTES
+app.use(cors());
+app.use(express.json());
+
 // Routes
 const dashboardRoutes = require("./Routes/dashboard.routes.js");
+const paymentRoutes = require("./Routes/Paymentcheckout.js");
+const stripeWebhook = require("./Routes/Stripewebhook.js");
 
 const {
   router: qrRouter,
@@ -26,11 +34,6 @@ const {
   setFreeQrCollection: setAdminFreeQrCollection
 } = require("./Routes/admin.routes");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use("/scan", scanRouter);
-
 // ---------------- MongoDB ----------------
 const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri);
@@ -42,12 +45,14 @@ let freeQrCollection;
 async function startServer() {
   try {
     await client.connect();
+    console.log("✅ MongoDB connected successfully");
+    
     const db = client.db(process.env.DB_NAME || "Qr-Code");
 
     // Collections
     usersCollection = db.collection("User");
     qrCollection = db.collection("Scan_count");
-    freeQrCollection = db.collection("freeqrs"); // ✅ Only define once
+    freeQrCollection = db.collection("freeqrs");
 
     // Inject into routes
     setAuthUsersCollection(usersCollection);
@@ -60,6 +65,8 @@ async function startServer() {
     setQrFreeQrCollection(freeQrCollection);
 
     // ---------------- Routes ----------------
+    app.use("/api/payment", paymentRoutes);
+    app.use("/api/stripe/webhook", stripeWebhook);
     app.use("/api/auth", authRouter);
     app.use("/api/admin", adminRouter);
     app.use("/api", qrRouter);
@@ -78,9 +85,15 @@ async function startServer() {
       }
     });
 
+    // Test route to verify payment routes are registered
+    console.log("✅ Payment routes registered at /api/payment");
+
     // ---------------- Start Server ----------------
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📍 Payment endpoint: http://localhost:${PORT}/api/payment/create-checkout-session`);
+    });
 
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err);
