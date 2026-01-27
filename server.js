@@ -5,21 +5,27 @@ const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
 
-// ⚠️ CRITICAL: Webhook MUST come BEFORE express.json()
+// ============================================
+// MIDDLEWARE (BEFORE ROUTES)
+// ============================================
+
+// Webhook needs raw body
 const { router: stripeWebhookRouter, setUsersCollection: setWebhookUsersCollection } = 
   require("./Routes/Stripewebhook.js");
 
-// Apply raw body parser ONLY for webhook route
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter);
 
-// NOW apply JSON parser for all other routes
+// JSON parser for other routes
 app.use(cors({
   origin: ["http://localhost:3000", "https://qrcodesmart.tech"],
   credentials: true
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Other routes
+// ============================================
+// IMPORT ROUTES
+// ============================================
 const dashboardRoutes = require("./Routes/dashboard.routes.js");
 const paymentRoutes = require("./Routes/Paymentcheckout.js");
 
@@ -43,7 +49,36 @@ const {
   setFreeQrCollection: setAdminFreeQrCollection
 } = require("./Routes/admin.routes.js");
 
-// ---------------- MongoDB ----------------
+// ============================================
+// REGISTER ROUTES (BEFORE MONGODB CONNECTION)
+// ============================================
+
+// Health check (no DB needed)
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    env: {
+      stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
+      webhookConfigured: !!process.env.STRIPE_WEBHOOK_SECRET,
+      mongoConfigured: !!process.env.MONGO_URI
+    }
+  });
+});
+
+// Register payment routes BEFORE async function
+console.log("📍 Registering payment routes...");
+app.use("/api/payment", paymentRoutes);
+
+// Register other routes
+app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api", qrRouter);
+app.use("/scan", scanRouter);
+
+// ============================================
+// MongoDB Connection
+// ============================================
 const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri);
 
@@ -53,18 +88,19 @@ let freeQrCollection;
 
 async function startServer() {
   try {
+    // Connect to MongoDB
     await client.connect();
     console.log("✅ MongoDB connected successfully");
     
     const db = client.db(process.env.DB_NAME || "Qr-Code");
 
-    // Collections
+    // Get collections
     usersCollection = db.collection("User");
     qrCollection = db.collection("Scan_count");
     freeQrCollection = db.collection("freeqrs");
 
-    // Inject into routes
-    setWebhookUsersCollection(usersCollection); // ✅ Add this
+    // Inject collections into routes
+    setWebhookUsersCollection(usersCollection);
     setAuthUsersCollection(usersCollection);
     setAdminUsersCollection(usersCollection);
     setAdminQrCollection(qrCollection);
@@ -74,26 +110,10 @@ async function startServer() {
     setQrQrCollection(qrCollection);
     setQrFreeQrCollection(freeQrCollection);
 
-    // ---------------- Routes ----------------
-    // Webhook already registered above (before express.json)
-    app.use("/api/payment", paymentRoutes);
-    app.use("/api/auth", authRouter);
-    app.use("/api/admin", adminRouter);
-    app.use("/api", qrRouter);
-    app.use("/scan", scanRouter);
+    // Register routes that need DB collections
     app.use("/api/dashboard", dashboardRoutes(qrCollection));
 
-    // Health check
-    app.get("/api/health", (req, res) => {
-      res.json({ 
-        status: "ok", 
-        timestamp: new Date().toISOString(),
-        stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
-        webhookConfigured: !!process.env.STRIPE_WEBHOOK_SECRET
-      });
-    });
-
-    // ---------------- QR Stats ----------------
+    // QR Stats route
     app.get("/api/stats/:id", async (req, res) => {
       try {
         const qr = await qrCollection.findOne({ _id: req.params.id });
@@ -105,12 +125,23 @@ async function startServer() {
       }
     });
 
-    // ---------------- Start Server ----------------
+    // 404 handler
+    app.use((req, res) => {
+      console.log(`❌ 404: ${req.method} ${req.url}`);
+      res.status(404).json({ 
+        error: "Route not found",
+        method: req.method,
+        path: req.url
+      });
+    });
+
+    // Start server
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📍 Payment endpoint: http://localhost:${PORT}/api/payment/create-checkout-session`);
-      console.log(`📍 Webhook endpoint: http://localhost:${PORT}/api/stripe/webhook`);
+      console.log(`📍 Payment: http://localhost:${PORT}/api/payment/create-checkout-session`);
+      console.log(`📍 Webhook: http://localhost:${PORT}/api/stripe/webhook`);
+      console.log(`📍 Health: http://localhost:${PORT}/api/health`);
     });
 
   } catch (err) {
