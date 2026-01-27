@@ -5,14 +5,20 @@ const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
 
-// ⚠️ MIDDLEWARE MUST BE BEFORE ROUTES
+// ⚠️ CRITICAL: Webhook MUST come BEFORE express.json()
+const { router: stripeWebhookRouter, setUsersCollection: setWebhookUsersCollection } = 
+  require("./Routes/Stripewebhook.js");
+
+// Apply raw body parser ONLY for webhook route
+app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter);
+
+// NOW apply JSON parser for all other routes
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Other routes
 const dashboardRoutes = require("./Routes/dashboard.routes.js");
 const paymentRoutes = require("./Routes/Paymentcheckout.js");
-const stripeWebhook = require("./Routes/Stripewebhook.js");
 
 const {
   router: qrRouter,
@@ -55,6 +61,7 @@ async function startServer() {
     freeQrCollection = db.collection("freeqrs");
 
     // Inject into routes
+    setWebhookUsersCollection(usersCollection); // ✅ Add this
     setAuthUsersCollection(usersCollection);
     setAdminUsersCollection(usersCollection);
     setAdminQrCollection(qrCollection);
@@ -65,13 +72,23 @@ async function startServer() {
     setQrFreeQrCollection(freeQrCollection);
 
     // ---------------- Routes ----------------
+    // Webhook already registered above (before express.json)
     app.use("/api/payment", paymentRoutes);
-    app.use("/api/stripe/webhook", stripeWebhook);
     app.use("/api/auth", authRouter);
     app.use("/api/admin", adminRouter);
     app.use("/api", qrRouter);
     app.use("/scan", scanRouter);
     app.use("/api/dashboard", dashboardRoutes(qrCollection));
+
+    // Health check
+    app.get("/api/health", (req, res) => {
+      res.json({ 
+        status: "ok", 
+        timestamp: new Date().toISOString(),
+        stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
+        webhookConfigured: !!process.env.STRIPE_WEBHOOK_SECRET
+      });
+    });
 
     // ---------------- QR Stats ----------------
     app.get("/api/stats/:id", async (req, res) => {
@@ -85,14 +102,12 @@ async function startServer() {
       }
     });
 
-    // Test route to verify payment routes are registered
-    console.log("✅ Payment routes registered at /api/payment");
-
     // ---------------- Start Server ----------------
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📍 Payment endpoint: http://localhost:${PORT}/api/payment/create-checkout-session`);
+      console.log(`📍 Webhook endpoint: http://localhost:${PORT}/api/stripe/webhook`);
     });
 
   } catch (err) {
