@@ -17,9 +17,16 @@ app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripe
 
 // JSON parser for other routes
 app.use(cors({
-  origin: ["http://localhost:3000", "https://qrcodesmart.tech"],
+  origin: [
+    "http://localhost:5173",   // ✅ Vite dev server
+    "http://localhost:3000",   // optional (old React default)
+    "https://qrcodesmart.tech" // production
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
