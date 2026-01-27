@@ -13,7 +13,10 @@ const { router: stripeWebhookRouter, setUsersCollection: setWebhookUsersCollecti
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter);
 
 // NOW apply JSON parser for all other routes
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:3000", "https://qrcodesmart.tech"],
+  credentials: true
+}));
 app.use(express.json());
 
 // Other routes
@@ -25,20 +28,20 @@ const {
   setUsersCollection: setQrUsersCollection,
   setQrCollection: setQrQrCollection,
   setFreeQrCollection: setQrFreeQrCollection
-} = require("./Routes/qr.routes");
+} = require("./Routes/qr.routes.js");
 
 const { router: authRouter, setCollection: setAuthUsersCollection } =
-  require("./Routes/auth.routes");
+  require("./Routes/auth.routes.js");
 
 const { router: scanRouter, setQrCollection: setScanQrCollection } =
-  require("./Routes/scan.routes");
+  require("./Routes/scan.routes.js");
 
 const {
   router: adminRouter,
   setUsersCollection: setAdminUsersCollection,
   setQrCollection: setAdminQrCollection,
   setFreeQrCollection: setAdminFreeQrCollection
-} = require("./Routes/admin.routes");
+} = require("./Routes/admin.routes.js");
 
 // ---------------- MongoDB ----------------
 const uri = process.env.MONGO_URI;
