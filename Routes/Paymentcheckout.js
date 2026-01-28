@@ -6,6 +6,8 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.error("❌ STRIPE_SECRET_KEY is not set!");
 }
 
+
+
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY || "sk_test_dummy");
 
 console.log("✅ Payment routes module loaded");

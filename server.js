@@ -10,10 +10,17 @@ const app = express();
 // ============================================
 
 // Webhook needs raw body
-const { router: stripeWebhookRouter, setUsersCollection: setWebhookUsersCollection } = 
-  require("./Routes/Stripewebhook.js");
+const { 
+  router: stripeWebhookRouter, 
+  setUsersCollection: setWebhookUsersCollection,
+  setQrCollection: setWebhookQrCollection  // ← ADDED THIS
+} = require("./Routes/Stripewebhook.js");
 
-app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookRouter);
+app.use(
+  "/api/webhook",
+  express.raw({ type: 'application/json' }), // required by Stripe
+  stripeWebhookRouter
+);
 
 // JSON parser for other routes
 app.use(cors({
@@ -108,6 +115,7 @@ async function startServer() {
 
     // Inject collections into routes
     setWebhookUsersCollection(usersCollection);
+    setWebhookQrCollection(qrCollection);  // ← ADDED THIS - CRITICAL!
     setAuthUsersCollection(usersCollection);
     setAdminUsersCollection(usersCollection);
     setAdminQrCollection(qrCollection);
@@ -116,6 +124,8 @@ async function startServer() {
     setQrUsersCollection(usersCollection);
     setQrQrCollection(qrCollection);
     setQrFreeQrCollection(freeQrCollection);
+
+    console.log("✅ All collections injected into routes");
 
     // Register routes that need DB collections
     app.use("/api/dashboard", dashboardRoutes(qrCollection));
@@ -141,13 +151,14 @@ async function startServer() {
         path: req.url
       });
     });
+    
 
     // Start server
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📍 Payment: http://localhost:${PORT}/api/payment/create-checkout-session`);
-      console.log(`📍 Webhook: http://localhost:${PORT}/api/stripe/webhook`);
+      console.log(`📍 Webhook: http://localhost:${PORT}/api/webhook`);  // ← Fixed URL
       console.log(`📍 Health: http://localhost:${PORT}/api/health`);
     });
 
